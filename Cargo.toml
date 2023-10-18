@@ -285,6 +285,10 @@ wmemcheck = ["wasmtime/wmemcheck"]
 name = "host_segfault"
 harness = false
 
+[[test]]
+name = "snapshot"
+harness = false
+
 [[example]]
 name = "tokio"
 required-features = ["wasmtime-wasi/tokio"]

@@ -6,6 +6,7 @@ use crate::store::{StoreOpaque, Stored};
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use anyhow::{bail, Context, Result};
 use std::mem::{self, MaybeUninit};
+use std::ops::Index;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
@@ -262,6 +263,13 @@ impl Func {
     pub fn params(&self, store: impl AsContext) -> Box<[Type]> {
         let store = store.as_context();
         let data = &store[self.0];
+        // println!("func params {} {:?}/{}", data.ty.as_u32(), data.instance.0.store_id, data.instance.0.index);
+        // for instance in store.0.all_instances() {
+        //     println!("//instance {:?} {:?}/{}", instance, instance.0.store_id, instance.0.index);
+        // }
+        //
+        // println!("{:?}", store[data.instance.0].is_some());
+
         let instance = store[data.instance.0].as_ref().unwrap();
         data.types[data.types[data.ty].params]
             .types

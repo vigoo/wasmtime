@@ -29,6 +29,8 @@ mod module_serialize;
 mod name;
 mod pooling_allocator;
 mod relocs;
+
+mod stack_creator;
 mod stack_overflow;
 mod store;
 mod table;

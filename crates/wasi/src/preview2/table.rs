@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::any::{Any, TypeId};
 use std::collections::{BTreeSet, HashMap};
 
 #[derive(thiserror::Error, Debug)]
@@ -209,6 +209,10 @@ impl Table {
         } else {
             Err(TableError::NotPresent)
         }
+    }
+
+    pub fn snapshot(&self) -> Vec<(u32, TypeId)> {
+        self.map.iter().map(|(idx, entry)| (*idx, entry.entry.type_id())).collect()
     }
 
     fn delete_entry(&mut self, key: u32) -> Result<TableEntry, TableError> {

@@ -312,3 +312,5 @@ pub(crate) use self::store::ComponentStoreData;
 ///
 /// [WIT package]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/WIT.md
 pub use wasmtime_component_macro::bindgen;
+
+pub use instance::Snapshot;

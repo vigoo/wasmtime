@@ -292,6 +292,10 @@ impl WasiCtxBuilder {
         let stdout_ix = table.push_output_stream(stdout.0).context("stdout")?;
         let stderr_ix = table.push_output_stream(stderr.0).context("stderr")?;
 
+        println!("stdin_ix: {}", stdin_ix);
+        println!("stdout_ix: {}", stdout_ix);
+        println!("stderr_ix: {}", stderr_ix);
+
         let preopens = preopens
             .into_iter()
             .map(|(dir, path)| {

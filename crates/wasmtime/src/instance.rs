@@ -30,7 +30,7 @@ use wasmtime_runtime::{
 /// available as [`Instance::new`].
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)]
-pub struct Instance(Stored<InstanceData>);
+pub struct Instance(pub(crate) Stored<InstanceData>);
 
 pub(crate) struct InstanceData {
     /// The id of the instance within the store, used to find the original
@@ -135,17 +135,37 @@ impl Instance {
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub async fn new_async<T>(
-        mut store: impl AsContextMut<Data = T>,
+        mut store: impl AsContextMut<Data=T>,
         module: &Module,
         imports: &[Extern],
     ) -> Result<Instance>
-    where
-        T: Send,
+        where
+            T: Send,
     {
         let mut store = store.as_context_mut();
         let imports = Instance::typecheck_externs(store.0, module, imports)?;
         // See `new` for notes on this unsafety
         unsafe { Instance::new_started_async(&mut store, module, imports.as_ref()).await }
+    }
+
+    /// X
+    pub fn snapshot_globals<T>(&self, mut store: impl AsContextMut<Data=T>) -> Vec<(u32, [u8; 16])> {
+        unsafe {
+            let store: &mut StoreOpaque = store.as_context_mut().0;
+            let data = &store[self.0];
+            let instance = store.instance_mut(data.id);
+            instance.snapshot_globals()
+        }
+    }
+
+    /// Y
+    pub fn restore_globals<T>(&self, mut store: impl AsContextMut<Data=T>, globals: &Vec<(u32, [u8; 16])>) {
+        unsafe {
+            let store: &mut StoreOpaque = store.as_context_mut().0;
+            let data = &store[self.0];
+            let instance = store.instance_mut(data.id);
+            instance.restore_globals(globals)
+        }
     }
 
     fn typecheck_externs(
@@ -209,8 +229,8 @@ impl Instance {
         module: &Module,
         imports: Imports<'_>,
     ) -> Result<Instance>
-    where
-        T: Send,
+        where
+            T: Send,
     {
         assert!(
             store.0.async_support(),
@@ -365,14 +385,14 @@ impl Instance {
     pub fn exports<'a, T: 'a>(
         &'a self,
         store: impl Into<StoreContextMut<'a, T>>,
-    ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
+    ) -> impl ExactSizeIterator<Item=Export<'a>> + 'a {
         self._exports(store.into().0)
     }
 
     fn _exports<'a>(
         &'a self,
         store: &'a mut StoreOpaque,
-    ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
+    ) -> impl ExactSizeIterator<Item=Export<'a>> + 'a {
         // If this is an `Instantiated` instance then all the `exports` may not
         // be filled in. Fill them all in now if that's the case.
         let InstanceData { exports, id, .. } = &store[self.0];
@@ -461,9 +481,9 @@ impl Instance {
         mut store: impl AsContextMut,
         name: &str,
     ) -> Result<TypedFunc<Params, Results>>
-    where
-        Params: crate::WasmParams,
-        Results: crate::WasmResults,
+        where
+            Params: crate::WasmParams,
+            Results: crate::WasmResults,
     {
         let f = self
             .get_export(store.as_context_mut(), name)
@@ -752,7 +772,7 @@ impl<T> InstancePre<T> {
     /// `store`, or if `store` has async support enabled. Additionally this
     /// function will panic if the `store` provided comes from a different
     /// [`Engine`] than the [`InstancePre`] originally came from.
-    pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
+    pub fn instantiate(&self, mut store: impl AsContextMut<Data=T>) -> Result<Instance> {
         let mut store = store.as_context_mut();
         let imports = pre_instantiate_raw(
             &mut store.0,
@@ -782,10 +802,10 @@ impl<T> InstancePre<T> {
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub async fn instantiate_async(
         &self,
-        mut store: impl AsContextMut<Data = T>,
+        mut store: impl AsContextMut<Data=T>,
     ) -> Result<Instance>
-    where
-        T: Send,
+        where
+            T: Send,
     {
         let mut store = store.as_context_mut();
         let imports = pre_instantiate_raw(
@@ -852,7 +872,7 @@ fn pre_instantiate_raw(
                         None
                     },
                 )
-                .into()
+                    .into()
             },
         };
         imports.push(&item, store, module);

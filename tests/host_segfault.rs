@@ -17,6 +17,8 @@ use std::process::{Command, ExitStatus};
 use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use wasmtime::*;
 
+mod snapshot;
+
 const VAR_NAME: &str = "__TEST_TO_RUN";
 const CONFIRM: &str = "well at least we ran up to the crash";
 

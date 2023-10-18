@@ -86,6 +86,7 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
             .unwrap_or_else(|| &DefaultMemoryCreator);
         let image = request.runtime_info.memory_image(memory_index)?;
         let allocation_index = MemoryAllocationIndex::default();
+        println!("ALLOCATING LINEAR MEMORY {:?}", memory_plan.memory);
         let memory = Memory::new_dynamic(
             memory_plan,
             creator,
@@ -115,6 +116,8 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
         _table_index: DefinedTableIndex,
     ) -> Result<(TableAllocationIndex, Table)> {
         let allocation_index = TableAllocationIndex::default();
+        println!("ALLOCATING TABLE {:?}", table_plan.table);
+
         let table = Table::new_dynamic(
             table_plan,
             request
@@ -140,6 +143,7 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
         if self.stack_size == 0 {
             anyhow::bail!("fiber stacks are not supported by the allocator")
         }
+        println!("ALLOCATING FIBER STACK");
 
         let stack = wasmtime_fiber::FiberStack::new(self.stack_size)?;
         Ok(stack)

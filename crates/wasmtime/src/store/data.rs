@@ -233,8 +233,8 @@ impl StoreId {
 
 #[repr(C)] // used by reference in the C API
 pub struct Stored<T> {
-    store_id: StoreId,
-    index: usize,
+    pub store_id: StoreId,
+    pub index: usize,
     _marker: marker::PhantomData<fn() -> T>,
 }
 

@@ -32,6 +32,7 @@ impl IsTerminal for Stdout {
 #[async_trait::async_trait]
 impl HostOutputStream for Stdout {
     fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), Error> {
+        println!("STDOUT {}", unsafe { String::from_utf8_unchecked(bytes.to_vec()) });
         self.0.write(bytes)
     }
     async fn ready(&mut self) -> Result<(), Error> {
@@ -52,6 +53,7 @@ impl IsTerminal for Stderr {
 #[async_trait::async_trait]
 impl HostOutputStream for Stderr {
     fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), Error> {
+        println!("STDERR {}", unsafe { String::from_utf8_unchecked(bytes.to_vec())} );
         self.0.write(bytes)
     }
     async fn ready(&mut self) -> Result<(), Error> {

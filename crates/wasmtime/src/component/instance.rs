@@ -11,7 +11,7 @@ use std::marker;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::*;
-use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmType};
+use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WASM_PAGE_SIZE, WasmType};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
 use wasmtime_runtime::VMFuncRef;
 
@@ -58,7 +58,94 @@ pub(crate) struct InstanceData {
     imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
 }
 
+/// Snapshot
+pub struct Snapshot {
+    /// x
+    pub memories: Vec<Vec<u8>>,
+    /// y
+    pub globals: Vec<Vec<(u32, [u8; 16])>>,
+}
+
 impl Instance {
+    /// Test
+    pub fn snapshot<'a, T: 'a>(&self, store: impl Into<StoreContextMut<'a, T>>) -> Result<Snapshot> {
+        let mut store = store.into();
+
+        let mut globals_snapshot = Vec::new();
+        for instance in store.0.all_instances() {
+            println!("Instance: {:?}", instance);
+            let globals = instance.snapshot_globals(&mut store);
+            println!("Globals: {:?}", globals);
+            globals_snapshot.push(globals);
+        }
+
+        let mut memories = Vec::new();
+
+        for memory in store.0.all_memories() {
+            memories.push(memory.clone());
+        }
+
+        let mut memories_snapshot = Vec::new();
+        for memory in memories {
+            println!("{:?}", memory.ty(&store));
+            let mut data = vec![0u8; memory.data_size(&store)];
+            memory.read(&store, 0, &mut data)?;
+            memories_snapshot.push(data);
+        }
+
+        Ok(Snapshot {
+            memories: memories_snapshot,
+            globals: globals_snapshot,
+        })
+    }
+
+    /// Test
+    pub fn restore<'a, T: 'a>(&self, store: impl Into<StoreContextMut<'a, T>>, snapshot: Snapshot) -> Result<()> {
+        let mut store = store.into();
+
+        // for instance in store.0.all_instances() {
+        //     println!("Instance: {:?}", instance);
+        //     let exports = instance.exports(&mut store);
+        //     for export in exports {
+        //         println!("Export: {:?}", export.name());
+        //     }
+        // }
+
+        let mut memories = Vec::new();
+
+        for memory in store.0.all_memories() {
+            memories.push(memory.clone());
+        }
+
+        println!("Got {} memories to restore", memories.len());
+
+        let mut idx = 0;
+        for memory in memories {
+            let data = &snapshot.memories[idx];
+
+            let current_size = memory.size(&store);
+            let stored_size = data.len() as u64 / (WASM_PAGE_SIZE as u64);
+            if current_size < stored_size {
+                println!("Growing memory {idx} from {current_size} to {stored_size}");
+                memory.grow(&mut store, stored_size - current_size)?;
+            }
+
+            println!("Current size: {current_size}, in bytes: {}", memory.data_size(&store));
+
+            let _ = memory.write(&mut store, 0, &data)?;
+            idx += 1;
+        }
+
+        idx = 0;
+        for instance in store.0.all_instances() {
+            let globals = &snapshot.globals[idx];
+            instance.restore_globals(&mut store, globals);
+            idx += 1;
+        }
+
+        Ok(())
+    }
+
     /// Returns information about the exports of this instance.
     ///
     /// This method can be used to extract exported values from this component
@@ -104,9 +191,9 @@ impl Instance {
         mut store: impl AsContextMut,
         name: &str,
     ) -> Result<TypedFunc<Params, Results>>
-    where
-        Params: ComponentNamedList + Lower,
-        Results: ComponentNamedList + Lift,
+        where
+            Params: ComponentNamedList + Lower,
+            Results: ComponentNamedList + Lift,
     {
         let f = self
             .get_func(store.as_context_mut(), name)
@@ -171,8 +258,8 @@ impl InstanceData {
         store: &mut StoreOpaque,
         item: &CoreExport<T>,
     ) -> wasmtime_runtime::Export
-    where
-        T: Copy + Into<EntityIndex>,
+        where
+            T: Copy + Into<EntityIndex>,
     {
         let instance = &self.instances[item.instance];
         let id = instance.id(store);
@@ -443,7 +530,7 @@ impl<'a> Instantiator<'a> {
         &mut self,
         store: &mut StoreOpaque,
         module: &Module,
-        args: impl Iterator<Item = &'b CoreDef>,
+        args: impl Iterator<Item=&'b CoreDef>,
     ) -> &OwnedImports {
         self.core_imports.clear();
         self.core_imports.reserve(module);
@@ -500,8 +587,8 @@ impl<'a> Instantiator<'a> {
             signatures: module.signatures(),
             types: module.types(),
         }
-        .definition(&expected, &ty)
-        .expect("unexpected typecheck failure");
+            .definition(&expected, &ty)
+            .expect("unexpected typecheck failure");
     }
 }
 
@@ -556,7 +643,7 @@ impl<T> InstancePre<T> {
     /// Performs the instantiation process into the store specified.
     //
     // TODO: needs more docs
-    pub fn instantiate(&self, store: impl AsContextMut<Data = T>) -> Result<Instance> {
+    pub fn instantiate(&self, store: impl AsContextMut<Data=T>) -> Result<Instance> {
         assert!(
             !store.as_context().async_support(),
             "must use async instantiation when async support is enabled"
@@ -572,10 +659,10 @@ impl<T> InstancePre<T> {
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub async fn instantiate_async(
         &self,
-        mut store: impl AsContextMut<Data = T>,
+        mut store: impl AsContextMut<Data=T>,
     ) -> Result<Instance>
-    where
-        T: Send,
+        where
+            T: Send,
     {
         let mut store = store.as_context_mut();
         assert!(
@@ -585,7 +672,7 @@ impl<T> InstancePre<T> {
         store.on_fiber(|store| self.instantiate_impl(store)).await?
     }
 
-    fn instantiate_impl(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
+    fn instantiate_impl(&self, mut store: impl AsContextMut<Data=T>) -> Result<Instance> {
         let mut store = store.as_context_mut();
         store
             .engine()
@@ -700,9 +787,9 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
 
     /// Same as [`Instance::get_typed_func`]
     pub fn typed_func<Params, Results>(&mut self, name: &str) -> Result<TypedFunc<Params, Results>>
-    where
-        Params: ComponentNamedList + Lower,
-        Results: ComponentNamedList + Lift,
+        where
+            Params: ComponentNamedList + Lower,
+            Results: ComponentNamedList + Lift,
     {
         let func = self
             .func(name)
@@ -748,7 +835,7 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
     //
     // For now this is just quick-and-dirty to get wast support for iterating
     // over exported modules to work.
-    pub fn modules(&self) -> impl Iterator<Item = (&'a str, &'a Module)> + '_ {
+    pub fn modules(&self) -> impl Iterator<Item=(&'a str, &'a Module)> + '_ {
         self.exports.iter().filter_map(|(name, export)| {
             let module = match *export {
                 Export::ModuleStatic(idx) => self.data.component.static_module(idx),

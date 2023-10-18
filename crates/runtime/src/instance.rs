@@ -26,6 +26,7 @@ use std::ptr::NonNull;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::{mem, ptr};
+use std::collections::HashMap;
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
@@ -1143,11 +1144,35 @@ impl Instance {
         self.initialize_vmctx_globals(module);
     }
 
+    /// X
+    pub unsafe fn snapshot_globals(&mut self, module: &Module) -> Vec<(u32, [u8; 16])> {
+        // TODO: snapshot memories here too?
+        let mut result = Vec::new();
+        for (index, _) in &module.globals {
+            let def = self.defined_or_imported_global_ptr(index);
+            let as_slice = def as *const [u8; 16];
+            result.push((index.as_u32(), *as_slice));
+        }
+
+        result
+    }
+
+    /// Y
+    pub unsafe fn restore_globals(&mut self, module: &Module,  globals: &Vec<(u32, [u8; 16])>) {
+        let map: HashMap<u32, [u8; 16]> = HashMap::from_iter(globals.iter().cloned());
+        for (index, _) in &module.globals {
+            let def = self.defined_or_imported_global_ptr(index);
+            let as_slice = def as *mut [u8; 16];
+            *as_slice = map[&index.as_u32()];
+        }
+    }
+
     unsafe fn initialize_vmctx_globals(&mut self, module: &Module) {
         for (index, init) in module.global_initializers.iter() {
             let to = self.global_ptr(index);
             let wasm_ty = module.globals[module.global_index(index)].wasm_ty;
 
+            println!("initializing a global {index:?}");
             // Initialize the global before writing to it
             ptr::write(to, VMGlobalDefinition::new());
 
@@ -1322,7 +1347,19 @@ impl InstanceHandle {
         self.instance_mut().get_table_with_lazy_init(index, range)
     }
 
-    /// Return a reference to the contained `Instance`.
+    /// X
+    pub unsafe fn snapshot_globals(&mut self) -> Vec<(u32, [u8; 16])> {
+        let module: &Module = &*self.module().clone();
+        self.instance_mut().snapshot_globals(&module)
+    }
+
+    /// Y
+    pub unsafe fn restore_globals(&mut self,  globals: &Vec<(u32, [u8; 16])>) {
+        let module: &Module = &*self.module().clone();
+        self.instance_mut().restore_globals(&module, globals)
+    }
+
+        /// Return a reference to the contained `Instance`.
     #[inline]
     pub(crate) fn instance(&self) -> &Instance {
         unsafe { &*self.instance.unwrap().as_ptr() }
